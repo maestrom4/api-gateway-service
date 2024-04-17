@@ -1,66 +1,33 @@
+// File: cmd/main.go
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 
-	"github.com/graphql-go/graphql"
+	"github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/relay"
 )
 
-type GraphqlQuery struct {
-	Query string `json:"query"`
-}
+type query struct{}
 
-var messageType = graphql.NewObject(graphql.ObjectConfig{
-	Name: "Message",
-	Fields: graphql.Fields{
-		"text": &graphql.Field{
-			Type: graphql.String,
-		},
-	},
-})
-
-var rootQuery = graphql.NewObject(graphql.ObjectConfig{
-	Name: "RootQuery",
-	Fields: graphql.Fields{
-		"hello": &graphql.Field{
-			Type: messageType,
-			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-				return map[string]interface{}{
-					"text": "Hello, world!",
-				}, nil
-			},
-		},
-	},
-})
-
-var schema, _ = graphql.NewSchema(graphql.SchemaConfig{
-	Query: rootQuery,
-})
-
-func handler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	var q GraphqlQuery
-	if err := json.NewDecoder(r.Body).Decode(&q); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	result := graphql.Do(graphql.Params{
-		Schema:        schema,
-		RequestString: q.Query,
-	})
-
-	json.NewEncoder(w).Encode(result)
+func (_ *query) Hello() string {
+	return "Hello, world!"
 }
 
 func main() {
-	http.HandleFunc("/graphql", handler)
-	log.Println("Starting server on :8080...")
+	schema := `
+        type Query {
+            hello: String!
+        }
+    `
+
+	parsedSchema, err := graphql.ParseSchema(schema, &query{})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	http.Handle("/graphql", &relay.Handler{Schema: parsedSchema})
+	log.Println("GraphQL server running on http://localhost:8080/graphql")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
